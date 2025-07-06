@@ -5,12 +5,23 @@ import datetime
 import random
 import yfinance as yf
 import pandas as pd
+from flask import Flask
+import threading
+
+# Dummy Flask web server to keep Render alive
+web = Flask(__name__)
+
+@web.route('/')
+def home():
+    return "Elvin's bot is running."
+
+def run_web():
+    web.run(host="0.0.0.0", port=10000)
 
 # Enable logs
 logging.basicConfig(level=logging.INFO)
 
-# Replace this with your actual token again if needed
-BOT_TOKEN = "7958535571:AAFxdEWVTNUElUguXJETpOERE_Vb4e9qBTk"
+BOT_TOKEN = "7958535571:AAFxdEWVTNUElUguXJETpOERE_Vb4eqBTk"
 
 # Store fake trade data
 trade_log = []
@@ -21,7 +32,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # /signal command
 async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Simulate a BUY or SELL
     signal_type = random.choice(["BUY", "SELL"])
     result = random.choice(["Win", "Loss"])
     trade_log.append({"signal": signal_type, "result": result, "time": datetime.datetime.now()})
@@ -48,9 +58,9 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Accuracy: {accuracy:.1f}%"
     )
 
-# /realsignal command using live RSI
+# /realsignal command using live RSI from yfinance
 async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = "EURUSD=X"  # Change to BTC-USD, AAPL, etc. if needed
+    symbol = "EURUSD=X"  # Can be BTC-USD, AAPL, etc.
     data = yf.download(tickers=symbol, period="1d", interval="5m")
 
     if data.empty:
@@ -79,16 +89,17 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
 
-# Build the bot
+# Build Telegram bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Add commands
+# Add handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("signal", signal))
 app.add_handler(CommandHandler("trend", trend))
 app.add_handler(CommandHandler("summary", summary))
 app.add_handler(CommandHandler("realsignal", realsignal))
 
-# Start the bot
+# Start both the web server and Telegram bot
+threading.Thread(target=run_web).start()
 print("✅ Bot is running...")
 app.run_polling()
