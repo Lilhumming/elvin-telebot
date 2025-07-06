@@ -6,7 +6,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 # Your actual Telegram Bot Token
-BOT_TOKEN = "7958535571:AAELA9_f4-TwHA11jhC4c8rG9BgR9DhAh2s"
+BOT_TOKEN = "7958535571:AAElA9_f4-TwHA11jhC4c8rG9BgR9DhAh2s"
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
