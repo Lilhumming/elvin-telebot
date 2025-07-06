@@ -10,7 +10,7 @@ import pandas as pd
 logging.basicConfig(level=logging.INFO)
 
 # Replace this with your actual token again if needed
-BOT_TOKEN = "7958535571:AAHR2XRy25ir6deEJq2tXcbCYpFLXYN97Bs"
+BOT_TOKEN = "7958535571:AAFxdEWVTNUElUguXJETpOERE_Vb4e9qBTk"
 
 # Store fake trade data
 trade_log = []
