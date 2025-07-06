@@ -21,6 +21,7 @@ def run_web():
 # Enable logs
 logging.basicConfig(level=logging.INFO)
 
+# Replace this with your actual bot token
 BOT_TOKEN = "7958535571:AAEVB49WOrlb5JNttueQeRxwDoGiCxLHZgc"
 
 # Store fake trade data
@@ -60,7 +61,7 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # /realsignal command using live RSI from yfinance
 async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = "EURUSD=X"  # Can be BTC-USD, AAPL, etc.
+    symbol = "EURUSD=X"  # You can change to BTC-USD, AAPL, etc.
     data = yf.download(tickers=symbol, period="1d", interval="5m")
 
     if data.empty:
@@ -77,9 +78,16 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    last_rsi = rsi.iloc[-1]
 
-    # Generate Signal
+    # Get last valid RSI value safely
+    rsi_clean = rsi.dropna()
+    last_rsi = rsi_clean.iloc[-1] if not rsi_clean.empty else None
+
+    if last_rsi is None:
+        await update.message.reply_text("⚠️ RSI calculation failed.")
+        return
+
+    # Generate signal
     if last_rsi < 30:
         signal = "📈 BUY (RSI = {:.2f})".format(last_rsi)
     elif last_rsi > 70:
@@ -99,7 +107,8 @@ app.add_handler(CommandHandler("trend", trend))
 app.add_handler(CommandHandler("summary", summary))
 app.add_handler(CommandHandler("realsignal", realsignal))
 
-# Start both the web server and Telegram bot
+# Start both the web server and the Telegram bot
 threading.Thread(target=run_web).start()
 print("✅ Bot is running...")
 app.run_polling()
+
