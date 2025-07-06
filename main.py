@@ -61,41 +61,49 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # /realsignal command using live RSI from yfinance
 async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = "EURUSD=X"  # You can change to BTC-USD, AAPL, etc.
-    data = yf.download(tickers=symbol, period="1d", interval="5m")
+    try:
+        symbol = "EURUSD=X"  # You can change this
+        data = yf.download(tickers=symbol, period="1d", interval="5m")
 
-    if data.empty:
-        await update.message.reply_text("⚠️ Failed to load market data.")
-        return
+        if data.empty:
+            await update.message.reply_text("⚠️ Failed to load market data from yfinance.")
+            return
 
-    # Calculate 14-period RSI
-    delta = data["Close"].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
+        # Calculate 14-period RSI
+        delta = data["Close"].diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
 
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
+        avg_gain = gain.rolling(14).mean()
+        avg_loss = loss.rolling(14).mean()
 
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
 
-    # Get last valid RSI value safely
-    rsi_clean = rsi.dropna()
-    last_rsi = rsi_clean.iloc[-1] if not rsi_clean.empty else None
+        rsi_clean = rsi.dropna()
+        last_rsi = rsi_clean.iloc[-1] if not rsi_clean.empty else None
 
-    if last_rsi is None:
-        await update.message.reply_text("⚠️ RSI calculation failed.")
-        return
+        if last_rsi is None:
+            await update.message.reply_text("⚠️ RSI calculation failed — not enough data.")
+            return
 
-    # Generate signal
-    if last_rsi < 30:
-        signal = "📈 BUY (RSI = {:.2f})".format(last_rsi)
-    elif last_rsi > 70:
-        signal = "📉 SELL (RSI = {:.2f})".format(last_rsi)
-    else:
-        signal = "⏸️ HOLD (RSI = {:.2f})".format(last_rsi)
+        # Log to Render
+        print(f"[RSI] Last RSI value for {symbol}: {last_rsi:.2f}")
 
-    await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
+        # Generate Signal
+        if last_rsi < 30:
+            signal = f"📈 BUY (RSI = {last_rsi:.2f})"
+        elif last_rsi > 70:
+            signal = f"📉 SELL (RSI = {last_rsi:.2f})"
+        else:
+            signal = f"⏸️ HOLD (RSI = {last_rsi:.2f})"
+
+        await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
+
+    except Exception as e:
+        # Log the full error to Render
+        print(f"[ERROR in /realsignal] {e}")
+        await update.message.reply_text("❌ An error occurred while generating signal.")
 
 # Build Telegram bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
