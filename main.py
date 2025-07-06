@@ -21,7 +21,7 @@ def run_web():
 # Enable logs
 logging.basicConfig(level=logging.INFO)
 
-BOT_TOKEN = "7958535571:AAFxdEWVTNUElUguXJETpOERE_Vb4eqBTk"
+BOT_TOKEN = "7958535571:AAEVB49WOrlb5JNttueQeRxwDoGiCxLHZgc"
 
 # Store fake trade data
 trade_log = []
