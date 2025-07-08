@@ -7,9 +7,9 @@ import yfinance as yf
 import pandas as pd
 from flask import Flask
 import threading
-import traceback  # For full error logging
+import traceback
 
-# Dummy Flask web server to keep Render alive
+# Flask web server to keep Render alive
 web = Flask(__name__)
 
 @web.route('/')
@@ -22,10 +22,8 @@ def run_web():
 # Enable logs
 logging.basicConfig(level=logging.INFO)
 
-# Replace this with your actual bot token
 BOT_TOKEN = "7958535571:AAEVB49WOrlb5JNttueQeRxwDoGiCxLHZgc"
 
-# Store fake trade data
 trade_log = []
 
 # /start command
@@ -60,19 +58,16 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Accuracy: {accuracy:.1f}%"
     )
 
-# /realsignal command using live RSI from yfinance
+# /realsignal command
 async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        symbol = "EURUSD=X"  # You can change this to any ticker
+        symbol = "EURUSD=X"
         data = yf.download(tickers=symbol, period="1d", interval="5m")
 
         if data.empty:
             await update.message.reply_text("⚠️ Failed to load market data from yfinance.")
             return
 
-        print(data.tail())  # Debug output to logs
-
-        # Calculate 14-period RSI
         delta = data["Close"].diff()
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
@@ -82,44 +77,45 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
-
         rsi_clean = rsi.dropna()
-        last_rsi = rsi_clean.iloc[-1] if not rsi_clean.empty else None
 
-        print(rsi_clean.tail())  # Debug output
-        print("Last RSI:", last_rsi)  # Debug output
+        last_rsi = rsi_clean.iloc[-1] if not rsi_clean.empty else None
 
         if last_rsi is None:
             await update.message.reply_text("⚠️ RSI calculation failed — not enough data.")
             return
 
-        print(f"[RSI] Last RSI value for {symbol}: {last_rsi:.2f}")
-
-        if last_rsi < 30:
-            signal = f"📈 BUY (RSI = {last_rsi:.2f})"
-        elif last_rsi > 70:
-            signal = f"📉 SELL (RSI = {last_rsi:.2f})"
+        if isinstance(last_rsi, pd.Series):
+            last_rsi_value = last_rsi.values[0]
         else:
-            signal = f"⏸️ HOLD (RSI = {last_rsi:.2f})"
+            last_rsi_value = float(last_rsi)
+
+        print(f"[RSI] Last RSI value for {symbol}: {last_rsi_value:.2f}")
+
+        if last_rsi_value < 30:
+            signal = f"📈 BUY (RSI = {last_rsi_value:.2f})"
+        elif last_rsi_value > 70:
+            signal = f"📉 SELL (RSI = {last_rsi_value:.2f})"
+        else:
+            signal = f"⏸️ HOLD (RSI = {last_rsi_value:.2f})"
 
         await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
 
     except Exception as e:
         traceback.print_exc()
-        print(f"[ERROR in /realsignal] {e}")
         await update.message.reply_text("❌ An error occurred while generating signal.")
 
-# Build Telegram bot
+# Bot application
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Add command handlers
+# Add handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("signal", signal))
 app.add_handler(CommandHandler("trend", trend))
 app.add_handler(CommandHandler("summary", summary))
 app.add_handler(CommandHandler("realsignal", realsignal))
 
-# Start Flask and bot
+# Run bot + web server
 threading.Thread(target=run_web).start()
 print("✅ Bot is running...")
 app.run_polling()
