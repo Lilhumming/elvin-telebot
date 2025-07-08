@@ -8,9 +8,9 @@ from telegram import Bot
 from telegram.ext import ApplicationBuilder, CommandHandler
 
 # === Config ===
-TOKEN = "7958535571:AAElA9_f4-TwHA11JhC4c8rG9BgR9DhAh2s"
+TOKEN = "7958535571:AAFmkGqAnL40Xg4Y67rlZqVkYyD_FI4Jle8"
 CHAT_ID = 7147175084
-SYMBOL = "EURUSD=X"  # Change to your preferred asset like "AAPL" or "BTC-USD"
+SYMBOLS = ["BTC-USD", "AAPL", "ETH-USD", "GBPUSD=X", "EURUSD=X"]  # Add/remove pairs here
 INTERVAL = 600  # 10 minutes in seconds
 RSI_PERIOD = 14
 
@@ -29,47 +29,48 @@ def calculate_rsi(data, period=RSI_PERIOD):
     return 100 - (100 / (1 + rs))
 
 # === Signal Generator ===
-def generate_signal():
+def generate_signal(symbol):
     now = datetime.datetime.now()
-    if now.weekday() == 5:  # Saturday = Silent Day
+    if now.weekday() == 5:  # Saturday = Silent Mode
         logger.info("Silent Saturday. No signal sent.")
         return None
 
-    data = yf.download(SYMBOL, period="2d", interval="15m")
+    data = yf.download(symbol, period="2d", interval="15m", progress=False)
     if data.empty or "Close" not in data:
-        logger.error("Failed to fetch price data.")
+        logger.error(f"Failed to fetch price data for {symbol}")
         return None
 
     rsi = calculate_rsi(data["Close"])
     latest_rsi = rsi.dropna().iloc[-1]
 
     if latest_rsi < 30:
-        signal = f"📈 RSI: {latest_rsi:.2f}\n🔵 Signal: BUY"
+        signal = f"📊 {symbol}\n📈 RSI: {latest_rsi:.2f}\n🔵 Signal: BUY"
     elif latest_rsi > 70:
-        signal = f"📉 RSI: {latest_rsi:.2f}\n🔴 Signal: SELL"
+        signal = f"📊 {symbol}\n📉 RSI: {latest_rsi:.2f}\n🔴 Signal: SELL"
     else:
-        signal = f"⚪ RSI: {latest_rsi:.2f}\n⏸️ Signal: HOLD"
+        signal = f"📊 {symbol}\n⚪ RSI: {latest_rsi:.2f}\n⏸️ Signal: HOLD"
 
-    logger.info(f"Signal Generated: {signal}")
+    logger.info(f"Signal for {symbol}: {signal}")
     return signal
 
-# === Send Signal ===
+# === Send All Signals ===
 def signal_loop(bot: Bot):
     while True:
         try:
-            signal = generate_signal()
-            if signal:
-                bot.send_message(chat_id=CHAT_ID, text=signal)
+            for symbol in SYMBOLS:
+                signal = generate_signal(symbol)
+                if signal:
+                    bot.send_message(chat_id=CHAT_ID, text=signal)
         except Exception as e:
             logger.error(f"Error in signal loop: {e}")
         time.sleep(INTERVAL)
 
 # === Bot Commands ===
 async def start(update, context):
-    await update.message.reply_text("🤖 I'm live and monitoring RSI signals for Pocket Option!")
+    await update.message.reply_text("🤖 I'm monitoring RSI signals for multiple assets!")
 
 async def help_command(update, context):
-    await update.message.reply_text("💡 This bot sends RSI-based signals every 10 minutes.\nNo alerts on Saturdays (Silent Mode).")
+    await update.message.reply_text("💡 This bot sends RSI-based signals every 10 minutes for:\n" + "\n".join(SYMBOLS) + "\n(Silent on Saturdays)")
 
 # === Main ===
 def main():
@@ -79,7 +80,7 @@ def main():
 
     bot = Bot(token=TOKEN)
 
-    # Run signal loop in background
+    # Background RSI signal thread
     thread = threading.Thread(target=signal_loop, args=(bot,))
     thread.daemon = True
     thread.start()
