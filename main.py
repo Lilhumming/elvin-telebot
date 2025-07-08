@@ -65,32 +65,31 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         symbol = "EURUSD=X"
         data = yf.download(tickers=symbol, period="1d", interval="5m")
 
-        if data.empty:
-            await update.message.reply_text("⚠️ Failed to load market data from yfinance.")
+        if data.empty or len(data) < 15:
+            await update.message.reply_text("⚠️ Not enough data to calculate RSI.")
             return
 
         # Calculate RSI
         delta = data["Close"].diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
 
         avg_gain = gain.rolling(window=14).mean()
         avg_loss = loss.rolling(window=14).mean()
 
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
+        rsi = rsi.dropna()
 
-        rsi_clean = rsi.dropna()
-        if rsi_clean.empty:
-            await update.message.reply_text("⚠️ Not enough data to calculate RSI.")
+        if rsi.empty:
+            await update.message.reply_text("⚠️ RSI calculation failed — insufficient data.")
             return
 
-        last_rsi = rsi_clean.iloc[-1]
+        last_rsi = float(rsi.iloc[-1])  # Ensure it's a float, not Series
 
-        # Log value
-        print(f"[RSI] Last RSI value: {last_rsi}")
+        print(f"[RSI] Last RSI for {symbol}: {last_rsi}")
 
-        # Generate signal
+        # Decision logic
         if last_rsi < 30:
             signal = f"📈 BUY (RSI = {last_rsi:.2f})"
         elif last_rsi > 70:
