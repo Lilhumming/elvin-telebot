@@ -7,6 +7,7 @@ import yfinance as yf
 import pandas as pd
 from flask import Flask
 import threading
+import traceback
 
 # Dummy Flask web server to keep Render alive
 web = Flask(__name__)
@@ -98,9 +99,6 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
             signal = f"⏸️ HOLD (RSI = {last_rsi:.2f})"
 
         await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
-
-    except Exception as e:
-       import traceback
 
 except Exception as e:
     traceback.print_exc()  # This prints the full error stack trace
