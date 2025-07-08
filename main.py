@@ -8,43 +8,42 @@ import pandas as pd
 from flask import Flask
 import threading
 
-# Web server to keep Render alive
+# Flask web server to keep Render alive
 web = Flask(__name__)
+
 @web.route('/')
 def home():
     return "Elvin's bot is running."
+
 def run_web():
     web.run(host="0.0.0.0", port=10000)
 
-# Logging
+# Enable logging
 logging.basicConfig(level=logging.INFO)
 
-# Your bot token
+# Your Telegram bot token
 BOT_TOKEN = "7958535571:AAEVB49WOrlb5JNttueQeRxwDoGiCxLHZgc"
 
-# Elvin's Telegram chat ID (for testing direct messages)
-ELVIN_ID = 7147175084
-
-# Trade log
+# Store trade results
 trade_log = []
 
-# /start
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Hello Elvin! Your trading bot is live and ready!")
 
-# /signal
+# /signal command
 async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     signal_type = random.choice(["BUY", "SELL"])
     result = random.choice(["Win", "Loss"])
     trade_log.append({"signal": signal_type, "result": result, "time": datetime.datetime.now()})
     await update.message.reply_text(f"📈 {signal_type} signal triggered!\nResult: {result}")
 
-# /trend
+# /trend command
 async def trend(update: Update, context: ContextTypes.DEFAULT_TYPE):
     trend = random.choice(["📈 UPTREND", "📉 DOWNTREND", "🔁 SIDEWAYS"])
     await update.message.reply_text(f"Current Market Trend: {trend}")
 
-# /summary
+# /summary command
 async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today = datetime.datetime.now().date()
     today_trades = [t for t in trade_log if t["time"].date() == today]
@@ -60,7 +59,7 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Accuracy: {accuracy:.1f}%"
     )
 
-# /realsignal
+# /realsignal command
 async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         symbol = "EURUSD=X"
@@ -70,23 +69,28 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ Failed to load market data from yfinance.")
             return
 
+        # Calculate RSI
         delta = data["Close"].diff()
         gain = delta.where(delta > 0, 0)
         loss = -delta.where(delta < 0, 0)
 
-        avg_gain = gain.rolling(14).mean()
-        avg_loss = loss.rolling(14).mean()
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
 
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
 
         rsi_clean = rsi.dropna()
-        last_rsi = rsi_clean.iloc[-1] if not rsi_clean.empty else None
-
-        if last_rsi is None:
-            await update.message.reply_text("⚠️ RSI calculation failed — not enough data.")
+        if rsi_clean.empty:
+            await update.message.reply_text("⚠️ Not enough data to calculate RSI.")
             return
 
+        last_rsi = rsi_clean.iloc[-1]
+
+        # Log value
+        print(f"[RSI] Last RSI value: {last_rsi}")
+
+        # Generate signal
         if last_rsi < 30:
             signal = f"📈 BUY (RSI = {last_rsi:.2f})"
         elif last_rsi > 70:
@@ -100,15 +104,17 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"[ERROR in /realsignal] {e}")
         await update.message.reply_text("❌ An error occurred while generating signal.")
 
-# Start bot
+# Initialize bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+# Add command handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("signal", signal))
 app.add_handler(CommandHandler("trend", trend))
 app.add_handler(CommandHandler("summary", summary))
 app.add_handler(CommandHandler("realsignal", realsignal))
 
-# Start Flask and bot
+# Start Flask + Bot
 threading.Thread(target=run_web).start()
 print("✅ Bot is running...")
 app.run_polling()
