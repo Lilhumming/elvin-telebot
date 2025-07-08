@@ -1,114 +1,90 @@
-import asyncio
-import datetime
+import os
 import logging
-import random
+import datetime
 import threading
-
-from flask import Flask
-import pandas as pd
+import time
 import yfinance as yf
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import Bot
+from telegram.ext import ApplicationBuilder, CommandHandler
 
-# --- Web Server for Render Keep-Alive ---
-web = Flask(__name__)
+# === Config ===
+TOKEN = "7958535571:AAElA9_f4-TwHA11JhC4c8rG9BgR9DhAh2s"
+CHAT_ID = 7147175084
+SYMBOL = "EURUSD=X"  # Change to your preferred asset like "AAPL" or "BTC-USD"
+INTERVAL = 600  # 10 minutes in seconds
+RSI_PERIOD = 14
 
-@web.route('/')
-def home():
-    return "Elvin's bot is alive!"
-
-def run_web():
-    web.run(host='0.0.0.0', port=10000)
-
-threading.Thread(target=run_web).start()
-
-# --- Bot Configuration ---
-BOT_TOKEN = "7958535571:AAEVB49WOrlb5JNttueQeRxwDoGiCxLHZgc"
-YOUR_CHAT_ID = 7147175084
+# === Logging ===
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# --- Store Trade Log ---
-trade_log = []
+# === RSI Calculation ===
+def calculate_rsi(data, period=RSI_PERIOD):
+    delta = data.diff()
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+    avg_gain = gain.rolling(window=period).mean()
+    avg_loss = loss.rolling(window=period).mean()
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
 
-# --- Commands ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Hello Elvin! Your trading bot is live and ready!")
+# === Signal Generator ===
+def generate_signal():
+    now = datetime.datetime.now()
+    if now.weekday() == 5:  # Saturday = Silent Day
+        logger.info("Silent Saturday. No signal sent.")
+        return None
 
-async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    signal_type = random.choice(["BUY", "SELL"])
-    result = random.choice(["Win", "Loss"])
-    trade_log.append({"signal": signal_type, "result": result, "time": datetime.datetime.now()})
-    await update.message.reply_text(f"📈 {signal_type} signal triggered!\nResult: {result}")
+    data = yf.download(SYMBOL, period="2d", interval="15m")
+    if data.empty or "Close" not in data:
+        logger.error("Failed to fetch price data.")
+        return None
 
-async def trend(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    trend = random.choice(["📈 UPTREND", "📉 DOWNTREND", "🔁 SIDEWAYS"])
-    await update.message.reply_text(f"Current Market Trend: {trend}")
+    rsi = calculate_rsi(data["Close"])
+    latest_rsi = rsi.dropna().iloc[-1]
 
-async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    today = datetime.datetime.now().date()
-    today_trades = [t for t in trade_log if t["time"].date() == today]
-    total = len(today_trades)
-    wins = sum(1 for t in today_trades if t["result"] == "Win")
-    losses = total - wins
-    accuracy = (wins / total * 100) if total > 0 else 0
-    await update.message.reply_text(
-        f"📊 Daily Summary:\n"
-        f"Total Trades: {total}\n"
-        f"Wins: {wins}\n"
-        f"Losses: {losses}\n"
-        f"Accuracy: {accuracy:.1f}%"
-    )
+    if latest_rsi < 30:
+        signal = f"📈 RSI: {latest_rsi:.2f}\n🔵 Signal: BUY"
+    elif latest_rsi > 70:
+        signal = f"📉 RSI: {latest_rsi:.2f}\n🔴 Signal: SELL"
+    else:
+        signal = f"⚪ RSI: {latest_rsi:.2f}\n⏸️ Signal: HOLD"
 
-async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        symbol = "EURUSD=X"
-        data = yf.download(tickers=symbol, period="1d", interval="5m")
+    logger.info(f"Signal Generated: {signal}")
+    return signal
 
-        if data.empty or len(data) < 15:
-            await update.message.reply_text("⚠️ Not enough data to calculate RSI.")
-            return
+# === Send Signal ===
+def signal_loop(bot: Bot):
+    while True:
+        try:
+            signal = generate_signal()
+            if signal:
+                bot.send_message(chat_id=CHAT_ID, text=signal)
+        except Exception as e:
+            logger.error(f"Error in signal loop: {e}")
+        time.sleep(INTERVAL)
 
-        delta = data["Close"].diff()
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
+# === Bot Commands ===
+async def start(update, context):
+    await update.message.reply_text("🤖 I'm live and monitoring RSI signals for Pocket Option!")
 
-        avg_gain = gain.rolling(window=14).mean()
-        avg_loss = loss.rolling(window=14).mean()
+async def help_command(update, context):
+    await update.message.reply_text("💡 This bot sends RSI-based signals every 10 minutes.\nNo alerts on Saturdays (Silent Mode).")
 
-        rs = avg_gain / avg_loss
-        rsi = 100 - (100 / (1 + rs))
-        rsi = rsi.dropna()
+# === Main ===
+def main():
+    application = ApplicationBuilder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
 
-        if rsi.empty:
-            await update.message.reply_text("⚠️ RSI calculation failed.")
-            return
+    bot = Bot(token=TOKEN)
 
-        last_rsi = float(rsi.iloc[-1])
+    # Run signal loop in background
+    thread = threading.Thread(target=signal_loop, args=(bot,))
+    thread.daemon = True
+    thread.start()
 
-        if last_rsi < 30:
-            signal = f"📈 BUY (RSI = {last_rsi:.2f})"
-        elif last_rsi > 70:
-            signal = f"📉 SELL (RSI = {last_rsi:.2f})"
-        else:
-            signal = f"⏸️ HOLD (RSI = {last_rsi:.2f})"
+    application.run_polling()
 
-        await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
-
-    except Exception as e:
-        print(f"[ERROR in /realsignal] {e}")
-        await update.message.reply_text("❌ An error occurred while generating signal.")
-
-# --- Launch Bot Without asyncio.run() ---
-def run_bot():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("signal", signal))
-    app.add_handler(CommandHandler("trend", trend))
-    app.add_handler(CommandHandler("summary", summary))
-    app.add_handler(CommandHandler("realsignal", realsignal))
-
-    print("✅ Bot is running...")
-    app.run_polling()
-
-threading.Thread(target=run_bot).start()
+if __name__ == "__main__":
+    main()
