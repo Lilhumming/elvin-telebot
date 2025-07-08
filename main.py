@@ -7,7 +7,7 @@ import yfinance as yf
 import pandas as pd
 from flask import Flask
 import threading
-import traceback
+import traceback  # For full error logging
 
 # Dummy Flask web server to keep Render alive
 web = Flask(__name__)
@@ -63,12 +63,14 @@ async def summary(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # /realsignal command using live RSI from yfinance
 async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        symbol = "EURUSD=X"  # You can change this
+        symbol = "EURUSD=X"  # You can change this to any ticker
         data = yf.download(tickers=symbol, period="1d", interval="5m")
 
         if data.empty:
             await update.message.reply_text("⚠️ Failed to load market data from yfinance.")
             return
+
+        print(data.tail())  # Debug output to logs
 
         # Calculate 14-period RSI
         delta = data["Close"].diff()
@@ -84,13 +86,15 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rsi_clean = rsi.dropna()
         last_rsi = rsi_clean.iloc[-1] if not rsi_clean.empty else None
 
+        print(rsi_clean.tail())  # Debug output
+        print("Last RSI:", last_rsi)  # Debug output
+
         if last_rsi is None:
             await update.message.reply_text("⚠️ RSI calculation failed — not enough data.")
             return
 
         print(f"[RSI] Last RSI value for {symbol}: {last_rsi:.2f}")
 
-        # Generate Signal
         if last_rsi < 30:
             signal = f"📈 BUY (RSI = {last_rsi:.2f})"
         elif last_rsi > 70:
@@ -100,26 +104,22 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
 
-except Exception as e:
-    traceback.print_exc()  # This prints the full error stack trace
-    print(f"[ERROR in /realsignal] {e}")
-    await update.message.reply_text("❌ An error occurred while generating signal.")
+    except Exception as e:
+        traceback.print_exc()
+        print(f"[ERROR in /realsignal] {e}")
+        await update.message.reply_text("❌ An error occurred while generating signal.")
 
-# Build bot
+# Build Telegram bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-# Add handlers
+# Add command handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("signal", signal))
 app.add_handler(CommandHandler("trend", trend))
 app.add_handler(CommandHandler("summary", summary))
 app.add_handler(CommandHandler("realsignal", realsignal))
 
-# MAIN block to run only one instance
-if __name__ == "__main__":
-    # Start Flask server in background to keep bot alive
-    threading.Thread(target=run_web).start()
-
-    print("✅ Bot is running (clean single instance)...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
-
+# Start Flask and bot
+threading.Thread(target=run_web).start()
+print("✅ Bot is running...")
+app.run_polling()
