@@ -1,34 +1,33 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
-import logging
-import datetime
-import random
-import yfinance as yf
-import pandas as pd
-from flask import Flask
-import threading
 import asyncio
+import datetime
+import logging
+import random
+import threading
 
-# --- Keep Alive Web Server ---
+from flask import Flask
+import pandas as pd
+import yfinance as yf
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+# --- Web Server for Render Keep-Alive ---
 web = Flask(__name__)
 
 @web.route('/')
 def home():
-    return "Elvin's bot is running."
+    return "Elvin's bot is alive!"
 
 def run_web():
-    web.run(host="0.0.0.0", port=10000)
+    web.run(host='0.0.0.0', port=10000)
 
 threading.Thread(target=run_web).start()
 
-# --- Logging ---
-logging.basicConfig(level=logging.INFO)
-
-# --- Bot Token ---
+# --- Bot Configuration ---
 BOT_TOKEN = "7958535571:AAEVB49WOrlb5JNttueQeRxwDoGiCxLHZgc"
 YOUR_CHAT_ID = 7147175084
+logging.basicConfig(level=logging.INFO)
 
-# --- Trade Log ---
+# --- Store Trade Log ---
 trade_log = []
 
 # --- Commands ---
@@ -99,9 +98,9 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"[ERROR in /realsignal] {e}")
         await update.message.reply_text("❌ An error occurred while generating signal.")
 
-# --- Run Bot ---
-async def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+# --- Launch Bot Without asyncio.run() ---
+def run_bot():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("signal", signal))
@@ -110,8 +109,6 @@ async def main():
     app.add_handler(CommandHandler("realsignal", realsignal))
 
     print("✅ Bot is running...")
-    await app.run_polling()
+    app.run_polling()
 
-# --- Run Everything ---
-if __name__ == "__main__":
-    asyncio.run(main())
+threading.Thread(target=run_bot).start()
