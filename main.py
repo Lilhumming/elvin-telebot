@@ -100,8 +100,12 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
 
     except Exception as e:
-        print(f"[ERROR in /realsignal] {e}")
-        await update.message.reply_text("❌ An error occurred while generating signal.")
+       import traceback
+
+except Exception as e:
+    traceback.print_exc()  # This prints the full error stack trace
+    print(f"[ERROR in /realsignal] {e}")
+    await update.message.reply_text("❌ An error occurred while generating signal.")
 
 # Build bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
