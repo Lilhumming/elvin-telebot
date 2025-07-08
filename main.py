@@ -87,7 +87,6 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⚠️ RSI calculation failed — not enough data.")
             return
 
-        # Log to Render
         print(f"[RSI] Last RSI value for {symbol}: {last_rsi:.2f}")
 
         # Generate Signal
@@ -101,11 +100,10 @@ async def realsignal(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🔍 Real Signal for {symbol}:\n{signal}")
 
     except Exception as e:
-        # Log the full error to Render
         print(f"[ERROR in /realsignal] {e}")
         await update.message.reply_text("❌ An error occurred while generating signal.")
 
-# Build Telegram bot
+# Build bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 # Add handlers
@@ -115,8 +113,11 @@ app.add_handler(CommandHandler("trend", trend))
 app.add_handler(CommandHandler("summary", summary))
 app.add_handler(CommandHandler("realsignal", realsignal))
 
-# Start both the web server and the Telegram bot
-threading.Thread(target=run_web).start()
-print("✅ Bot is running...")
-app.run_polling()
+# MAIN block to run only one instance
+if __name__ == "__main__":
+    # Start Flask server in background to keep bot alive
+    threading.Thread(target=run_web).start()
+
+    print("✅ Bot is running (clean single instance)...")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
